@@ -1,0 +1,8 @@
+date,weigh_time,weight_kg,waist_cm,menu_day,pre_run_kcal,breakfast_kcal,lunch_kcal,snack_kcal,dinner_kcal,calories_kcal,protein_g,run_distance_km,run_type,avg_hr,swim_distance_m,strength_session,dance_minutes,sleep_h,hunger_1_5,pain_0_10,symptoms,notes
+2025-01-06,morning,72.0,,D1,0,450,650,200,600,1900,120,2,easy,,,,0,8,,,,fictional sample; day closed
+2025-01-07,morning,71.9,,D2,0,450,650,200,600,1900,120,0,,,,,0,8,,,,fictional sample; day closed
+2025-01-08,morning,72.1,,D3,0,450,650,200,600,1900,120,0,,,,,30,8,,,,fictional sample; day closed
+2025-01-09,morning,71.8,,D4,0,450,650,200,600,1900,120,0,,,,示例力量练习,0,8,,,,fictional sample; day closed
+2025-01-10,morning,71.9,,D5,0,450,650,200,600,1900,120,2,easy,,,,0,8,,,,fictional sample; day closed
+2025-01-11,morning,71.7,,D6,0,450,650,200,600,1900,120,0,,,,,0,8,,,,fictional sample; day closed
+2025-01-12,morning,71.8,,D7,0,450,650,200,600,1900,120,0,,,,,0,8,,,,fictional sample; day closed
