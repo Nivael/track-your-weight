@@ -1,0 +1,34 @@
+[
+  {
+    "as_of_date": "2025-01-15",
+    "window_days": 3,
+    "based_on_dates": [
+      "2025-01-13",
+      "2025-01-14",
+      "2025-01-15"
+    ],
+    "title": "均衡饮食与恢复一起看",
+    "summary": "这是虚构案例，用于展示带来源、日期和数据质量说明的建议卡片。建议内容由维护者更新，面板不会自动生成营养处方。",
+    "observations": [
+      "示例记录覆盖 3 天，其中最后一天尚未结算。",
+      "示例同时保留摄入、蛋白质及活动信息，缺失字段不计零。"
+    ],
+    "actions": [
+      "先核对记录完整性，再讨论趋势。",
+      "在能量平衡的基础上兼顾蛋白质、食物多样性、睡眠和恢复。",
+      "饱腹感只作为选择食物的参考，不设额外打卡。"
+    ],
+    "next_day_focus": "示例：补全当天已有餐食信息，不用未记录值推断摄入。",
+    "data_quality": "所有数值完全虚构，仅演示信息结构，不适用于个体营养目标。",
+    "sources": [
+      {
+        "title": "NICE：能量平衡与饮食",
+        "url": "https://www.nice.org.uk/guidance/ng246/chapter/Physical-activity-and-diet"
+      },
+      {
+        "title": "NIH：运动营养",
+        "url": "https://ods.od.nih.gov/factsheets/ExerciseAndAthleticPerformance-HealthProfessional/"
+      }
+    ]
+  }
+]

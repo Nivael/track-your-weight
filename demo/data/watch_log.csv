@@ -1,0 +1,6 @@
+date,entry_type,workout_type,start_time,duration_min,distance_km,distance_m,avg_hr_bpm,sleep_total_h,sleep_core_h,sleep_deep_h,sleep_rem_h,sleep_awake_h,sleep_score,sleep_rating,sleep_hr_min_bpm,sleep_hr_max_bpm,respiratory_min_brpm,respiratory_max_brpm,source,notes
+2025-01-10,workout,Outdoor Run,,20,2.4,,,,,,,,,,,,,,Synthetic demo,Fictional data; not a real screenshot
+2025-01-13,workout,Pool Swim,,25,,600,,,,,,,,,,,,,Synthetic demo,
+2025-01-15,workout,Functional Strength Training,,35,,,,,,,,,,,,,,,Synthetic demo,
+2025-01-15,workout,Dance,,20,,,,,,,,,,,,,,,Synthetic demo,
+2025-01-15,sleep,,,,,,,8,4.5,1.5,2,,,,,,,,Synthetic demo,

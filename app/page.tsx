@@ -1,11 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { weekRange, metric } from '@/lib/statistics';
 import {
   Activity,
   ArrowDownRight,
   ArrowUpRight,
   Camera,
-  Check,
   ChevronRight,
   Dumbbell,
   Footprints,
@@ -32,8 +32,28 @@ import {
 type RecordRow = Record<string, string>;
 type Photo = { folder: string; date: string; files: string[] };
 type JourneyEntry = { date: string; title: string; summary: string };
+type DietAdvice = {
+  as_of_date: string;
+  window_days: number;
+  based_on_dates: string[];
+  title: string;
+  summary: string;
+  observations: string[];
+  actions: string[];
+  next_day_focus: string;
+  data_quality: string;
+  sources?: { title: string; url: string }[];
+};
 type Data = {
+  trainingPlan?: {
+    as_of_date: string;
+    rationale: string;
+    entries: { date: string; name: string; detail: string }[];
+  };
   records: RecordRow[];
+  nutritionAnalysis: RecordRow[];
+  watchRecords: RecordRow[];
+  dietAdvice: DietAdvice[];
   photos: Photo[];
   journey: JourneyEntry[];
 };
@@ -41,58 +61,7 @@ const short = (s: string) => s.slice(5).replace('-', '.');
 const num = (v: string | undefined) => (v ? Number(v) : null);
 const show = (v: string | undefined) => v || '未记录';
 const photoUrl = (folder: string, file: string) =>
-  `/api/photo?path=${encodeURIComponent(folder + '/' + file)}`;
-const plan = [
-  {
-    date: '2025-01-06',
-    day: '周一',
-    name: '轻松跑',
-    detail: '示例跑步记录',
-    kind: '跑步',
-  },
-  {
-    date: '2025-01-07',
-    day: '周二',
-    name: '恢复日',
-    detail: '示例休息安排',
-    kind: '恢复',
-  },
-  {
-    date: '2025-01-08',
-    day: '周三',
-    name: '舞蹈练习',
-    detail: '示例活动',
-    kind: '舞蹈',
-  },
-  {
-    date: '2025-01-09',
-    day: '周四',
-    name: '力量练习',
-    detail: '示例力量安排',
-    kind: '力量',
-  },
-  {
-    date: '2025-01-10',
-    day: '周五',
-    name: '轻松跑',
-    detail: '示例跑步安排',
-    kind: '跑步',
-  },
-  {
-    date: '2025-01-11',
-    day: '周六',
-    name: '恢复日',
-    detail: '示例休息安排',
-    kind: '恢复',
-  },
-  {
-    date: '2025-01-12',
-    day: '周日',
-    name: '自由活动',
-    detail: '示例活动安排',
-    kind: '恢复',
-  },
-];
+  `/progress_photos/${encodeURIComponent(folder)}/${encodeURIComponent(file)}`;
 const meals = [
   ['pre_run_kcal', '跑前', '训练前补给'],
   ['breakfast_kcal', '早餐', '一天的开始'],
@@ -101,8 +70,14 @@ const meals = [
   ['dinner_kcal', '晚餐', '晚间正餐'],
 ];
 const budget: Record<string, number> = Object.fromEntries(
-  Array.from({ length: 7 }, (_, i) => [`D${i + 1}`, 2000]),
+  Array.from({ length: 14 }, (_, i) => [`D${i + 1}`, 2000]),
 );
+const mealPhotoLabel = (file: string) =>
+  file.startsWith('meal_breakfast')
+    ? '早餐'
+    : file.startsWith('meal_lunch')
+      ? '午餐'
+      : '晚餐';
 function Picker({
   value,
   onChange,
@@ -134,6 +109,7 @@ export default function Home() {
     [error, setError] = useState(''),
     [loading, setLoading] = useState(false),
     [date, setDate] = useState(''),
+    [period, setPeriod] = useState<'day' | 'week'>('day'),
     [angle, setAngle] = useState('front'),
     [before, setBefore] = useState(''),
     [after, setAfter] = useState('');
@@ -158,6 +134,8 @@ export default function Home() {
     void refresh();
   }, []);
   const records = data?.records || [],
+    nutritionRows = data?.nutritionAnalysis || [],
+    watchRecords = data?.watchRecords || [],
     mornings = records.filter((r) => r.weigh_time === 'morning' && r.weight_kg),
     latest = mornings.at(-1),
     baseline = mornings[0],
@@ -165,6 +143,7 @@ export default function Home() {
     latestWaist = waistRecords.at(-1),
     baselineWaist = waistRecords[0],
     selected = records.find((r) => r.date === date),
+    selectedNutrition = nutritionRows.find((r) => r.date === date),
     days = records.filter((r) => r.menu_day),
     start = records.find((r) => r.weigh_time === 'evening');
   const current = Number(latest?.weight_kg || 0),
@@ -179,19 +158,45 @@ export default function Home() {
       base > target
         ? Math.max(0, Math.min(100, (lost / (base - target)) * 100))
         : 0;
-  const today = '2025-01-12'; // Fixed date for fictional demo records.
-  const todayPlan = plan.find((p) => p.date === today),
+  const today = '2025-01-16'; // Fixed clock for synthetic demo data.
+  const todayPlan = data?.trainingPlan?.entries.find((p) => p.date === today),
     elapsed = Math.max(
       1,
       Math.min(
-        7,
+        28,
         Math.floor((Date.parse(today) - Date.parse('2025-01-06')) / 86400000) +
           1,
       ),
     );
   const currentKcal = num(selected?.calories_kcal),
     protein = num(selected?.protein_g),
-    planned = budget[selected?.menu_day || ''];
+    planned = budget[selected?.menu_day || ''] ?? 2000;
+  const macroWeightRecord = mornings.filter((r) => r.date <= date).at(-1),
+    macroWeight = num(macroWeightRecord?.weight_kg),
+    carbs = num(selectedNutrition?.carbs_g),
+    macroProtein = num(selectedNutrition?.protein_g) ?? protein,
+    fat = num(selectedNutrition?.fat_g),
+    advice = (data?.dietAdvice || [])
+      .filter(
+        (entry) =>
+          entry.as_of_date <=
+          (period === 'week' ? weekRange(date || today)[1] : date),
+      )
+      .at(-1);
+  const [weekStart, weekEnd] = weekRange(date || today);
+  const inPeriod = (r: RecordRow) =>
+    period === 'day'
+      ? r.date === date
+      : r.date >= weekStart && r.date <= weekEnd;
+  const selectableDates = [
+    ...new Set([...days.map((r) => r.date), date].filter(Boolean)),
+  ].sort();
+  const periodRecords = records.filter(inPeriod);
+  const periodWorkouts = watchRecords.filter(
+    (r) => r.entry_type === 'workout' && inPeriod(r),
+  );
+  const periodLabel =
+    period === 'day' ? short(date) : `${short(weekStart)}–${short(weekEnd)}`;
   const recent = latest
     ? mornings.filter(
         (r) => Date.parse(r.date) >= Date.parse(latest.date) - 6 * 86400000,
@@ -219,7 +224,7 @@ export default function Home() {
         </a>
         <div className="top-actions">
           <span className="local">
-            <LockKeyhole size={14} /> 仅本机
+            <LockKeyhole size={14} /> 私人面板
           </span>
           <button className="refresh" onClick={refresh} disabled={loading}>
             <RefreshCw size={16} className={loading ? 'spinning' : ''} />
@@ -229,7 +234,7 @@ export default function Home() {
       </header>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">虚构示例 · 2025.01.06 / 01.12</p>
+          <p className="eyebrow">2025.01.06 / 02.02 · 虚构演示</p>
           <h1>我的减重进度</h1>
         </div>
         <div className="period">
@@ -237,7 +242,7 @@ export default function Home() {
             计划第 <b>{elapsed}</b> 天
           </span>
           <span>
-            共 7 天 ·{' '}
+            共 28 天 ·{' '}
             {elapsed <= 7
               ? '校准周'
               : elapsed <= 28
@@ -288,9 +293,9 @@ export default function Home() {
                 </div>
                 <ChevronRight size={17} />
                 <div>
-                  <span>示例目标</span>
+                  <span>冲刺目标</span>
                   <strong>
-                    68 <small>kg</small>
+                    {target} <small>kg</small>
                   </strong>
                 </div>
                 <div className="target-percent">
@@ -300,10 +305,10 @@ export default function Home() {
               </div>
               <Progress
                 value={progress}
-                aria-label="从晨起基线到示例目标的进度"
+                aria-label="从晨起基线到冲刺目标的进度"
               />
               <p className="caption">
-                所有日期、体重和目标均为虚构演示，不构成健康建议
+                按晨重基线计算 · 所有目标和记录均为虚构示例
               </p>
               <div className="waist-summary">
                 <div>
@@ -342,7 +347,7 @@ export default function Home() {
           <div className="status-strip">
             <div>
               <CalendarDays size={18} />
-              <strong>{todayPlan ? '今日安排' : '计划记录'}</strong>
+              <strong>{todayPlan ? '今日建议 · 待执行' : '记录与建议'}</strong>
               <span>
                 {todayPlan
                   ? `${short(today)} · ${todayPlan.name}，${todayPlan.detail}`
@@ -351,6 +356,42 @@ export default function Home() {
             </div>
             <span>
               {days.length} 天饮食记录 · {data.photos.length} 组体型照片
+            </span>
+          </div>
+          <div className="period-controls">
+            <div className="period-switch" role="group" aria-label="统计周期">
+              <button
+                aria-pressed={period === 'day'}
+                onClick={() => setPeriod('day')}
+              >
+                日
+              </button>
+              <button
+                aria-pressed={period === 'week'}
+                onClick={() => setPeriod('week')}
+              >
+                周
+              </button>
+            </div>
+            <Picker
+              value={period === 'day' ? date : weekStart}
+              onChange={setDate}
+              items={
+                period === 'day'
+                  ? selectableDates.map((d) => ({ value: d, label: short(d) }))
+                  : [...new Set(days.map((r) => weekRange(r.date)[0]))].map(
+                      (d) => ({
+                        value: d,
+                        label: `${short(d)}–${short(weekRange(d)[1])}`,
+                      }),
+                    )
+              }
+              label={period === 'day' ? '选择统计日期' : '选择统计周'}
+            />
+            <span className="muted">
+              {period === 'week'
+                ? '自然周 · 周一至周日 · 缺失不计零'
+                : '饮食与运动使用同一日期'}
             </span>
           </div>
           <Tabs
@@ -386,13 +427,15 @@ export default function Home() {
             </TabsContent>
             <TabsContent value="nutrition">
               {renderNutrition({ full: true })}
+              {renderDietAdvice()}
               <section className="panel menu-notes">
                 <div className="section-head">
                   <h2>七天食谱与执行计划</h2>
                   <Utensils size={19} />
                 </div>
                 <p>
-                  数值均为虚构演示，用于展示记录和目标的排版；未记录的数值不视为零。
+                  每日预算为虚构示例 2000
+                  kcal。食物照片和未称量餐食均按估算记录；未记录的数值不视为零。
                 </p>
                 <div className="document-links">
                   {['七天食谱.md', '减重执行计划.md'].map((d) => (
@@ -411,10 +454,11 @@ export default function Home() {
             </TabsContent>
             <TabsContent value="exercise">
               {renderExercise({ full: true })}
+              {renderWatchSync()}
               <section className="panel recovery">
                 <h2>恢复记录</h2>
                 <div className="recovery-grid">
-                  {days.map((r) => (
+                  {days.filter(inPeriod).map((r) => (
                     <div key={r.date}>
                       <span>{short(r.date)}</span>
                       <strong>
@@ -447,7 +491,7 @@ export default function Home() {
           {renderJourney()}
           <footer>
             <span>
-              <LockKeyhole size={13} /> 数据与照片保存在本机
+              <LockKeyhole size={13} /> 私人健康记录
             </span>
             <span>最新日志 {records.at(-1)?.date} · 缺失记录不作推测</span>
           </footer>
@@ -468,7 +512,7 @@ export default function Home() {
           <div>
             <p className="section-kicker">不只记录数字</p>
             <h2 id="journey-title">心路历程</h2>
-            <p>此处展示虚构的个人手记示例。</p>
+            <p>把聊天里零散但重要的念头，收进这段路的叙事里。</p>
           </div>
           <span>{entries.length} 则记录</span>
         </div>
@@ -494,6 +538,7 @@ export default function Home() {
     );
   }
   function renderNutrition({ full = false }: { full?: boolean }) {
+    if (period === 'week') return renderWeeklyNutrition();
     return (
       <section className={'panel nutrition ' + (full ? 'full' : '')}>
         <div className="section-head">
@@ -504,9 +549,13 @@ export default function Home() {
           <Picker
             value={date}
             onChange={setDate}
-            items={days.map((r) => ({
-              value: r.date,
-              label: short(r.date) + ' · ' + r.menu_day,
+            items={selectableDates.map((d) => ({
+              value: d,
+              label:
+                short(d) +
+                (days.find((r) => r.date === d)?.menu_day
+                  ? ' · ' + days.find((r) => r.date === d)?.menu_day
+                  : ' · 未记录'),
             }))}
             label="选择饮食日期"
           />
@@ -541,8 +590,8 @@ export default function Home() {
           <span>
             {currentKcal == null
               ? '尚未记录'
-              : currentKcal < planned
-                ? '记录摄入低于示例预算'
+              : currentKcal < 1200
+                ? '请先确认当日记录是否完整'
                 : currentKcal > planned
                   ? `较预算多 ${currentKcal - planned} kcal`
                   : `距预算 ${planned - currentKcal} kcal`}
@@ -576,118 +625,433 @@ export default function Home() {
             <Leaf size={16} /> 蛋白质
           </span>
           <strong>
-            {protein ?? '--'} <small>/ 120 g 示例目标</small>
+            {macroProtein ?? '--'} <small>/ 120 g 示例目标</small>
           </strong>
         </div>
         <Progress
-          value={protein != null ? Math.min(100, (protein / 120) * 100) : 0}
+          value={
+            macroProtein != null ? Math.min(100, (macroProtein / 120) * 100) : 0
+          }
           aria-label="蛋白质目标进度"
         />
         <p className="caption">
-          蛋白质示例目标 120 g ·{' '}
+          示例目标仅用于演示，不代表个人营养建议 ·{' '}
           {selected?.notes.includes('partial-day')
             ? '当日记录待最终确认'
             : selected?.notes.includes('day closed')
               ? '当日已结算'
               : '待确认结算状态'}
         </p>
+        {full && (
+          <div className="macro-analysis">
+            <div className="macro-heading">
+              <div>
+                <p className="section-kicker">营养素重量</p>
+                <h3>全天汇总与每公斤体重</h3>
+              </div>
+              <span>
+                {macroWeight
+                  ? `按 ${macroWeight.toFixed(2)} kg 计算`
+                  : '缺少可用晨重'}
+              </span>
+            </div>
+            <div className="macro-grid">
+              {[
+                ['碳水化合物', carbs],
+                ['蛋白质', macroProtein],
+                ['脂肪', fat],
+              ].map(([label, value]) => {
+                const amount = typeof value === 'number' ? value : null;
+                return (
+                  <div className="macro-card" key={String(label)}>
+                    <span>{label}</span>
+                    <strong>
+                      {amount == null ? '--' : amount.toFixed(0)}
+                      <small>{amount == null ? '' : ' g'}</small>
+                    </strong>
+                    <p>
+                      {amount != null && macroWeight
+                        ? (amount / macroWeight).toFixed(2) + ' g/kg'
+                        : '-- g/kg'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="macro-source">
+              {selectedNutrition?.estimate_status === 'low_confidence'
+                ? '低置信度估算：存在成分不明的餐食。'
+                : selectedNutrition?.estimate_status === 'estimated'
+                  ? '根据已记录食物、份量和标签估算。'
+                  : selectedNutrition
+                    ? '按已确认营养数据计算。'
+                    : '该日尚未完成宏量营养素核算。'}{' '}
+              每公斤数值使用所选日期当日或此前最近一次晨重；空值不会按 0 处理。
+            </p>
+          </div>
+        )}
+      </section>
+    );
+  }
+  function renderWeeklyNutrition() {
+    const calories = metric(periodRecords, 'calories_kcal');
+    const proteinStats = metric(periodRecords, 'protein_g');
+    const weight = metric(
+      periodRecords.filter((r) => r.weigh_time === 'morning'),
+      'weight_kg',
+    );
+    const closed = periodRecords.filter((r) =>
+      r.notes?.includes('day closed'),
+    ).length;
+    return (
+      <section className="panel nutrition full">
+        <div className="section-head">
+          <h2>
+            <Utensils size={19} /> 一周饮食与体重
+          </h2>
+          <span>{periodLabel}</span>
+        </div>
+        <div className="weekly-grid">
+          {[
+            [
+              '日均摄入',
+              calories.mean?.toFixed(0) ?? '--',
+              'kcal',
+              `${calories.count}/7 天有记录`,
+            ],
+            [
+              '日均蛋白质',
+              proteinStats.mean?.toFixed(0) ?? '--',
+              'g',
+              `${proteinStats.count}/7 天有记录`,
+            ],
+            [
+              '平均晨重',
+              weight.mean?.toFixed(2) ?? '--',
+              'kg',
+              `${weight.count}/7 天有晨重`,
+            ],
+            [
+              '已记录摄入合计',
+              calories.count ? calories.total.toFixed(0) : '--',
+              'kcal',
+              `${closed} 天已结算 · 其余可能不完整`,
+            ],
+          ].map(([label, value, unit, note]) => (
+            <div key={label}>
+              <span>{label}</span>
+              <strong>
+                {value}
+                <small> {unit}</small>
+              </strong>
+              <p>{note}</p>
+            </div>
+          ))}
+        </div>
+        <p className="caption">
+          均值仅按各项有数据的日期计算；包含尚未结算的估算，不代表完整周摄入或热量缺口。
+        </p>
+        <div className="week-table-wrap">
+          <table className="week-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>摄入 kcal</th>
+                <th>蛋白质 g</th>
+                <th>晨重 kg</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 7 }, (_, i) => {
+                const d = new Date(Date.parse(weekStart) + i * 86400000)
+                  .toISOString()
+                  .slice(0, 10);
+                const r = periodRecords.find((r) => r.date === d);
+                return (
+                  <tr key={d}>
+                    <td>
+                      <button
+                        onClick={() => {
+                          setDate(d);
+                          setPeriod('day');
+                        }}
+                      >
+                        {short(d)}
+                      </button>
+                    </td>
+                    <td>{r?.calories_kcal || '—'}</td>
+                    <td>{r?.protein_g || '—'}</td>
+                    <td>
+                      {r?.weigh_time === 'morning' ? r.weight_kg || '—' : '—'}
+                    </td>
+                    <td>
+                      {d > today
+                        ? '尚未到来'
+                        : !r?.calories_kcal
+                          ? '未记录'
+                          : r.notes?.includes('day closed')
+                            ? '已结算'
+                            : '待确认'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
     );
   }
   function renderExercise({ full = false }: { full?: boolean }) {
-    const runTotal = days.reduce(
-        (s, r) => s + Number(r.run_distance_km || 0),
-        0,
-      ),
-      danceTotal = days.reduce((s, r) => s + Number(r.dance_minutes || 0), 0);
+    const duration = metric(periodWorkouts, 'duration_min');
+    const workoutName = (name: string) =>
+      ({
+        Dance: '舞蹈',
+        'Functional Strength Training': '功能性力量训练',
+        'Pool Swim': '泳池游泳',
+        'Outdoor Run': '户外跑步',
+      })[name] || name;
+    const plan = data?.trainingPlan;
+    const latestWatchDate = watchRecords.at(-1)?.date;
     return (
       <section className={'panel exercise ' + (full ? 'full' : '')}>
         <div className="section-head">
           <h2>
-            <Dumbbell size={19} />
-            运动与恢复
+            <Dumbbell size={19} /> 实际运动
           </h2>
-          <span className="muted">第一周</span>
+          <span>{periodLabel}</span>
         </div>
         <div className="exercise-totals">
           <div>
-            <Footprints size={19} />
-            <strong>
-              {runTotal.toFixed(2)}
-              <small>km</small>
-            </strong>
-            <span>已记录跑步</span>
-          </div>
-          <div>
             <Activity size={19} />
             <strong>
-              {danceTotal}
+              {periodWorkouts.length || '--'}
+              <small>次</small>
+            </strong>
+            <span>Watch 已记录活动</span>
+          </div>
+          <div>
+            <Footprints size={19} />
+            <strong>
+              {duration.count ? duration.total : '--'}
               <small>min</small>
             </strong>
-            <span>已记录舞蹈</span>
+            <span>
+              已记录时长
+              {duration.count < periodWorkouts.length ? ' · 部分缺失' : ''}
+            </span>
           </div>
         </div>
+        {!periodWorkouts.length && (
+          <p className="watch-empty">
+            这个{period === 'day' ? '日期' : '周'}还没有 Watch
+            训练记录。没有截图不代表没有运动。
+          </p>
+        )}
         <div className="schedule">
-          {plan.map((p) => {
-            const r = records.find((r) => r.date === p.date),
-              cancelled =
-                p.kind === '跑步' && Boolean(r?.run_type.startsWith('skipped')),
-              done =
-                !cancelled &&
-                (p.kind === '跑步'
-                  ? Number(r?.run_distance_km) > 0
-                  : p.kind === '舞蹈'
-                    ? Number(r?.dance_minutes) > 0
-                    : p.kind === '力量'
-                      ? Boolean(r?.strength_session)
-                      : false);
-            return (
-              <div
-                className={'schedule-row ' + (p.date === today ? 'today' : '')}
-                key={p.date}
-              >
-                <div className="schedule-date">
-                  <b>{short(p.date)}</b>
-                  <span>{p.day}</span>
-                </div>
-                <div className="schedule-name">
-                  <strong>{p.name}</strong>
-                  <span>
-                    {done
-                      ? p.kind === '跑步'
-                        ? `已跑 ${r?.run_distance_km} km`
-                        : p.kind === '舞蹈'
-                          ? `已记录 ${r?.dance_minutes} 分钟`
-                          : r?.strength_session
-                      : p.detail}
-                  </span>
-                </div>
-                <span
-                  className={
-                    'schedule-state ' +
-                    (done ? 'done' : cancelled ? 'cancelled' : '')
-                  }
-                >
-                  {done ? (
-                    <Check size={17} />
-                  ) : cancelled ? (
-                    '已取消'
-                  ) : p.kind === '恢复' ? (
-                    '休息'
-                  ) : p.date < today ? (
-                    '未记录'
-                  ) : (
-                    '计划'
-                  )}
+          {periodWorkouts.map((r, i) => (
+            <div className="schedule-row" key={`${r.date}-${i}`}>
+              <div className="schedule-date">
+                <b>{short(r.date)}</b>
+                <span>{r.start_time || '时间未显示'}</span>
+              </div>
+              <div className="schedule-name">
+                <strong>{workoutName(r.workout_type)}</strong>
+                <span>
+                  {r.duration_min ? `${r.duration_min} 分钟` : '时长未显示'}
+                  {r.distance_km
+                    ? ` · ${r.distance_km} km`
+                    : r.distance_m
+                      ? ` · ${r.distance_m} m`
+                      : ''}
+                  {r.avg_hr_bpm ? ` · 平均心率 ${r.avg_hr_bpm}` : ''}
+                  {r.workout_type === 'Dance' ? ' · 娱乐 / 恢复参考' : ''}
                 </span>
               </div>
-            );
-          })}
+              <span className="schedule-state done">已记录</span>
+            </div>
+          ))}
         </div>
         <p className="caption">
-          舞蹈计入恢复负荷，不折算为可吃回热量。取消的训练不补做。
+          仅汇总截图已确认的活动；计划和手填历史记录不混入。舞蹈单列为娱乐活动，不计正式训练配额；手表热量不直接换成饮食额度。
         </p>
-        {full && <p className="caption">运动时长只累计已填写的示例记录。</p>}
+        {plan && (
+          <details className="future-plan" open={full}>
+            <summary>接下来怎么练 · 可调整</summary>
+            <p className="caption">
+              依据截至 {short(plan.as_of_date)} 的截图与恢复记录：
+              {plan.rationale}
+            </p>
+            {latestWatchDate && latestWatchDate > plan.as_of_date && (
+              <p className="caption">已有较新截图，以下安排待重新评估。</p>
+            )}
+            <div className="schedule">
+              {plan.entries
+                .filter((p) => p.date >= today)
+                .map((p) => (
+                  <div className="schedule-row" key={p.date}>
+                    <div className="schedule-date">
+                      <b>{short(p.date)}</b>
+                    </div>
+                    <div className="schedule-name">
+                      <strong>{p.name}</strong>
+                      <span>{p.detail}</span>
+                    </div>
+                    <span className="schedule-state">建议</span>
+                  </div>
+                ))}
+            </div>
+            <p className="caption">
+              收到新截图后更新建议；不会把未执行的安排记成完成，也不补做漏掉的训练。
+            </p>
+          </details>
+        )}
+      </section>
+    );
+  }
+
+  function renderDietAdvice() {
+    if (!advice) {
+      return (
+        <section className="panel diet-advice">
+          <div className="section-head">
+            <h2>
+              <MessageCircle size={19} /> 每日饮食建议
+            </h2>
+          </div>
+          <p className="watch-empty">
+            所选日期暂无已保存的建议。收到饮食记录后，会结合近期趋势更新。
+          </p>
+        </section>
+      );
+    }
+    return (
+      <section
+        className="panel diet-advice"
+        aria-labelledby="diet-advice-title"
+      >
+        <div className="advice-header">
+          <div>
+            <p className="section-kicker">营养与恢复 · 循证建议</p>
+            <h2 id="diet-advice-title">{advice.title}</h2>
+          </div>
+          <span>
+            截至该日的 {advice.window_days} 日窗口 · 更新至{' '}
+            {short(advice.as_of_date)}
+          </span>
+        </div>
+        <p className="advice-summary">{advice.summary}</p>
+        <div className="advice-columns">
+          <div>
+            <h3>最近体现</h3>
+            <ul>
+              {advice.observations.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3>接下来怎么吃</h3>
+            <ol>
+              {advice.actions.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ol>
+          </div>
+        </div>
+        <div className="advice-focus">
+          <strong>下一天唯一重点</strong>
+          <p>{advice.next_day_focus}</p>
+        </div>
+        <p className="advice-quality">数据口径：{advice.data_quality}</p>
+        <div className="advice-sources">
+          参考依据：
+          {advice.sources?.map((source) => (
+            <a
+              key={source.url}
+              href={source.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {source.title}
+            </a>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  function renderWatchSync() {
+    const latestSleep = [...watchRecords]
+      .filter((r) => r.entry_type === 'sleep' && inPeriod(r))
+      .at(-1);
+    const workouts = [...watchRecords]
+      .filter((r) => r.entry_type === 'workout' && inPeriod(r))
+      .reverse();
+    return (
+      <section className="panel watch-sync" aria-labelledby="watch-sync-title">
+        <div className="section-head">
+          <h2 id="watch-sync-title">
+            <Moon size={19} /> Apple Watch 数据
+          </h2>
+          <span className="muted">{periodLabel} · 截图明细</span>
+        </div>
+        {!latestSleep && workouts.length === 0 ? (
+          <div className="watch-empty">
+            <strong>所选期间尚未收到 Watch 明细。</strong>
+            <p>
+              发两张截图即可：健康 App 的“睡眠”日详情，以及健身 App
+              的“体能训练”详情。我会录入时长、睡眠阶段、距离和心率；活动热量不用于增加饮食额度。
+            </p>
+          </div>
+        ) : (
+          <div className="watch-grid">
+            {latestSleep && (
+              <article className="watch-entry">
+                <span>{short(latestSleep.date)} · 睡眠</span>
+                <strong>{show(latestSleep.sleep_total_h)} h</strong>
+                <p>
+                  核心 {show(latestSleep.sleep_core_h)} h · 深睡{' '}
+                  {show(latestSleep.sleep_deep_h)} h · REM{' '}
+                  {show(latestSleep.sleep_rem_h)} h
+                </p>
+                <p>
+                  睡眠评分 {show(latestSleep.sleep_score)}
+                  {latestSleep.sleep_rating
+                    ? `（${latestSleep.sleep_rating}）`
+                    : ''}{' '}
+                  · 睡眠心率 {show(latestSleep.sleep_hr_min_bpm)}–
+                  {show(latestSleep.sleep_hr_max_bpm)} bpm · 呼吸{' '}
+                  {show(latestSleep.respiratory_min_brpm)}–
+                  {show(latestSleep.respiratory_max_brpm)} 次/分
+                </p>
+              </article>
+            )}
+            {workouts.map((r, index) => (
+              <article
+                className="watch-entry"
+                key={`${r.date}-${r.start_time}-${index}`}
+              >
+                <span>
+                  {short(r.date)} · {show(r.workout_type)}
+                </span>
+                <strong>
+                  {show(r.duration_min)} <small>min</small>
+                </strong>
+                <p>
+                  {r.distance_km ? `${r.distance_km} km · ` : ''}
+                  {r.distance_m ? `${r.distance_m} m · ` : ''}
+                  平均心率 {show(r.avg_hr_bpm)} bpm
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
+        <p className="caption">
+          Apple Watch 会先同步到 iPhone 健康
+          App；本页只展示你主动交给本项目的摘要，不会直接读取手机健康数据库。
+        </p>
       </section>
     );
   }
@@ -750,7 +1114,11 @@ export default function Home() {
             <div className="photo-grid">
               {[before, after].map((folder, i) => {
                 const entry = data?.photos.find((p) => p.folder === folder),
-                  exists = entry?.files.includes(angle + '.jpeg');
+                  file = entry?.files.find((candidate) =>
+                    [angle + '.jpeg', angle + '.jpg'].includes(
+                      candidate.toLowerCase(),
+                    ),
+                  );
                 return (
                   <figure key={i}>
                     <div className="photo-label">
@@ -762,15 +1130,15 @@ export default function Home() {
                         label={i === 0 ? '起点照片日期' : '对比照片日期'}
                       />
                     </div>
-                    {exists ? (
+                    {file ? (
                       <a
-                        href={photoUrl(folder, angle + '.jpeg')}
+                        href={photoUrl(folder, file)}
                         target="_blank"
                         rel="noreferrer"
                         aria-label={'查看' + entry?.date + '体型照片原图'}
                       >
                         <img
-                          src={photoUrl(folder, angle + '.jpeg')}
+                          src={photoUrl(folder, file)}
                           alt={`${entry?.date} ${angle === 'front' ? '正面' : angle === 'side_left' ? '左侧面' : '右侧面'}体型记录`}
                           loading="lazy"
                         />
@@ -818,16 +1186,12 @@ export default function Home() {
               >
                 <img
                   src={photoUrl(p.folder, p.file)}
-                  alt={
-                    p.date +
-                    (p.file === 'meal_lunch.jpeg' ? '午餐' : '晚餐进食前')
-                  }
+                  alt={p.date + ' ' + mealPhotoLabel(p.file)}
                   loading="lazy"
                 />
               </a>
               <figcaption>
-                {short(p.date)} ·{' '}
-                {p.file === 'meal_lunch.jpeg' ? '午餐' : '晚餐 · 进食前'}
+                {short(p.date)} · {mealPhotoLabel(p.file)}
               </figcaption>
             </figure>
           ))}

@@ -1,12 +1,12 @@
-import { readFile, readdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
-export const root = resolve(process.cwd(), 'demo');
+import content from './generated-content.json';
+
 export const documents = [
   '减重执行计划.md',
   '七天食谱.md',
   '一周训练计划.md',
   '监测规则.md',
-];
+] as const;
+
 export function parseCSV(text: string) {
   const rows: string[][] = [];
   let row: string[] = [],
@@ -38,36 +38,29 @@ export function parseCSV(text: string) {
     Object.fromEntries(headers.map((h, i) => [h, r[i] || ''])),
   );
 }
+
+export function getDocumentContent(name: string) {
+  return (content.documents as Record<string, string>)[name] || null;
+}
+
 export async function getData() {
-  const records = parseCSV(
-    await readFile(resolve(root, 'data/daily_log.csv'), 'utf8'),
-  ).sort((a, b) => a.date.localeCompare(b.date));
-  let journey: { date: string; title: string; summary: string }[] = [];
-  try {
-    journey = JSON.parse(
-      await readFile(resolve(root, 'data/journey.json'), 'utf8'),
-    );
-  } catch {
-    journey = [];
-  }
-  const folders = (
-    await readdir(resolve(root, 'progress_photos'), { withFileTypes: true })
-  ).filter((d) => d.isDirectory() && /^\d{4}-\d{2}-\d{2}_D\d+$/.test(d.name));
-  const photos = await Promise.all(
-    folders.map(async (d) => ({
-      folder: d.name,
-      date: d.name.slice(0, 10),
-      files: (await readdir(resolve(root, 'progress_photos', d.name))).filter(
-        (f) =>
-          /^(front|side_left|side_right|meal_lunch|meal_dinner_before)\.jpeg$/.test(
-            f,
-          ),
-      ),
-    })),
-  );
   return {
-    records,
-    journey: journey.sort((a, b) => a.date.localeCompare(b.date)),
-    photos: photos.sort((a, b) => a.date.localeCompare(b.date)),
+    records: parseCSV(content.dailyLog).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    ),
+    trainingPlan: content.trainingPlan,
+    nutritionAnalysis: parseCSV(content.nutritionAnalysis).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    ),
+    watchRecords: parseCSV(content.watchLog).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    ),
+    dietAdvice: content.dietAdvice.sort((a, b) =>
+      a.as_of_date.localeCompare(b.as_of_date),
+    ),
+    journey: content.journey.sort((a, b) => a.date.localeCompare(b.date)),
+    photos: (
+      content.photos as { folder: string; date: string; files: string[] }[]
+    ).sort((a, b) => a.date.localeCompare(b.date)),
   };
 }

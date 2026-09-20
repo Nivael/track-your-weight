@@ -7,10 +7,14 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "build": "vinext build",
+    "build": "npm run content:sync && vinext build",
     "start": "vinext start --hostname 127.0.0.1",
     "lint": "oxlint",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "content:sync": "node scripts/sync-content.mjs",
+    "predev": "npm run content:sync",
+    "pretest": "npm run content:sync",
+    "test": "node --experimental-strip-types --test lib/statistics.test.mjs scripts/privacy.test.mjs"
   },
   "dependencies": {
     "react": "19.2.6",

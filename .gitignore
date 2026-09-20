@@ -50,3 +50,8 @@ next-env.d.ts
 *.png
 *.heic
 *.log
+
+# Generated content and photo exports
+/lib/generated-content.json
+/public/progress_photos/
+/design/

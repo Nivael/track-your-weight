@@ -6,3 +6,6 @@ date,weigh_time,weight_kg,waist_cm,menu_day,pre_run_kcal,breakfast_kcal,lunch_kc
 2025-01-10,morning,71.9,,D5,0,450,650,200,600,1900,120,2,easy,,,,0,8,,,,fictional sample; day closed
 2025-01-11,morning,71.7,,D6,0,450,650,200,600,1900,120,0,,,,,0,8,,,,fictional sample; day closed
 2025-01-12,morning,71.8,,D7,0,450,650,200,600,1900,120,0,,,,,0,8,,,,fictional sample; day closed
+2025-01-13,morning,71.7,,D8,0,400,650,200,650,1900,120,,,,,,,8,,,,fictional sample; day closed
+2025-01-14,morning,71.6,,D9,0,400,650,200,650,1900,120,,,,,,,8,,,,fictional sample; day closed
+2025-01-15,morning,71.5,84,D10,0,400,650,200,650,1900,120,,,,,,,8,,,,fictional sample; partial-day
